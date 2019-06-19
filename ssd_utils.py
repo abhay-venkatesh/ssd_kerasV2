@@ -18,21 +18,28 @@ class BBoxUtility(object):
     # References
         https://arxiv.org/abs/1512.02325
     """
+
     # TODO add setter methods for nms_thresh and top_K
-    def __init__(self, num_classes, priors=None, overlap_threshold=0.5,
-                 nms_thresh=0.45, top_k=400):
+    def __init__(
+        self,
+        num_classes,
+        priors=None,
+        overlap_threshold=0.5,
+        nms_thresh=0.45,
+        top_k=400,
+    ):
         self.num_classes = num_classes
         self.priors = priors
         self.num_priors = 0 if priors is None else len(priors)
         self.overlap_threshold = overlap_threshold
         self._nms_thresh = nms_thresh
         self._top_k = top_k
-        self.boxes = tf.placeholder(dtype='float32', shape=(None, 4))
-        self.scores = tf.placeholder(dtype='float32', shape=(None,))
-        self.nms = tf.image.non_max_suppression(self.boxes, self.scores,
-                                                self._top_k,
-                                                iou_threshold=self._nms_thresh)
-        self.sess = tf.Session(config=tf.ConfigProto(device_count={'GPU': 0}))
+        self.boxes = tf.placeholder(dtype="float32", shape=(None, 4))
+        self.scores = tf.placeholder(dtype="float32", shape=(None,))
+        self.nms = tf.image.non_max_suppression(
+            self.boxes, self.scores, self._top_k, iou_threshold=self._nms_thresh
+        )
+        self.sess = tf.Session(config=tf.ConfigProto(device_count={"GPU": 0}))
 
     @property
     def nms_thresh(self):
@@ -41,9 +48,9 @@ class BBoxUtility(object):
     @nms_thresh.setter
     def nms_thresh(self, value):
         self._nms_thresh = value
-        self.nms = tf.image.non_max_suppression(self.boxes, self.scores,
-                                                self._top_k,
-                                                iou_threshold=self._nms_thresh)
+        self.nms = tf.image.non_max_suppression(
+            self.boxes, self.scores, self._top_k, iou_threshold=self._nms_thresh
+        )
 
     @property
     def top_k(self):
@@ -52,9 +59,9 @@ class BBoxUtility(object):
     @top_k.setter
     def top_k(self, value):
         self._top_k = value
-        self.nms = tf.image.non_max_suppression(self.boxes, self.scores,
-                                                self._top_k,
-                                                iou_threshold=self._nms_thresh)
+        self.nms = tf.image.non_max_suppression(
+            self.boxes, self.scores, self._top_k, iou_threshold=self._nms_thresh
+        )
 
     def iou(self, box):
         """Compute intersection over union for the box with all priors.
@@ -74,8 +81,8 @@ class BBoxUtility(object):
         inter = inter_wh[:, 0] * inter_wh[:, 1]
         # compute union
         area_pred = (box[2] - box[0]) * (box[3] - box[1])
-        area_gt = (self.priors[:, 2] - self.priors[:, 0])
-        area_gt *= (self.priors[:, 3] - self.priors[:, 1])
+        area_gt = self.priors[:, 2] - self.priors[:, 0]
+        area_gt *= self.priors[:, 3] - self.priors[:, 1]
         union = area_pred + area_gt - inter
         # compute iou
         iou = inter / union
@@ -102,16 +109,15 @@ class BBoxUtility(object):
         assigned_priors = self.priors[assign_mask]
         box_center = 0.5 * (box[:2] + box[2:])
         box_wh = box[2:] - box[:2]
-        assigned_priors_center = 0.5 * (assigned_priors[:, :2] +
-                                        assigned_priors[:, 2:4])
-        assigned_priors_wh = (assigned_priors[:, 2:4] -
-                              assigned_priors[:, :2])
+        assigned_priors_center = 0.5 * (
+            assigned_priors[:, :2] + assigned_priors[:, 2:4]
+        )
+        assigned_priors_wh = assigned_priors[:, 2:4] - assigned_priors[:, :2]
         # we encode variance
         encoded_box[:, :2][assign_mask] = box_center - assigned_priors_center
         encoded_box[:, :2][assign_mask] /= assigned_priors_wh
         encoded_box[:, :2][assign_mask] /= assigned_priors[:, -4:-2]
-        encoded_box[:, 2:4][assign_mask] = np.log(box_wh /
-                                                  assigned_priors_wh)
+        encoded_box[:, 2:4][assign_mask] = np.log(box_wh / assigned_priors_wh)
         encoded_box[:, 2:4][assign_mask] /= assigned_priors[:, -2:]
         return encoded_box.ravel()
 
@@ -142,9 +148,9 @@ class BBoxUtility(object):
         best_iou_idx = best_iou_idx[best_iou_mask]
         assign_num = len(best_iou_idx)
         encoded_boxes = encoded_boxes[:, best_iou_mask, :]
-        assignment[:, :4][best_iou_mask] = encoded_boxes[best_iou_idx,
-                                                         np.arange(assign_num),
-                                                         :4]
+        assignment[:, :4][best_iou_mask] = encoded_boxes[
+            best_iou_idx, np.arange(assign_num), :4
+        ]
         assignment[:, 4][best_iou_mask] = 0
         assignment[:, 5:-8][best_iou_mask] = boxes[best_iou_idx, 4:]
         assignment[:, -8][best_iou_mask] = 1
@@ -177,15 +183,25 @@ class BBoxUtility(object):
         decode_bbox_ymin = decode_bbox_center_y - 0.5 * decode_bbox_height
         decode_bbox_xmax = decode_bbox_center_x + 0.5 * decode_bbox_width
         decode_bbox_ymax = decode_bbox_center_y + 0.5 * decode_bbox_height
-        decode_bbox = np.concatenate((decode_bbox_xmin[:, None],
-                                      decode_bbox_ymin[:, None],
-                                      decode_bbox_xmax[:, None],
-                                      decode_bbox_ymax[:, None]), axis=-1)
+        decode_bbox = np.concatenate(
+            (
+                decode_bbox_xmin[:, None],
+                decode_bbox_ymin[:, None],
+                decode_bbox_xmax[:, None],
+                decode_bbox_ymax[:, None],
+            ),
+            axis=-1,
+        )
         decode_bbox = np.minimum(np.maximum(decode_bbox, 0.0), 1.0)
         return decode_bbox
 
-    def detection_out(self, predictions, background_label_id=0, keep_top_k=200,
-                      confidence_threshold=0.01):
+    def detection_out(
+        self,
+        predictions,
+        background_label_id=0,
+        keep_top_k=200,
+        confidence_threshold=0.01,
+    ):
         """Do non maximum suppression (nms) on prediction results.
 
         # Arguments
@@ -208,8 +224,7 @@ class BBoxUtility(object):
         results = []
         for i in range(len(mbox_loc)):
             results.append([])
-            decode_bbox = self.decode_boxes(mbox_loc[i],
-                                            mbox_priorbox[i], variances[i])
+            decode_bbox = self.decode_boxes(mbox_loc[i], mbox_priorbox[i], variances[i])
             for c in range(self.num_classes):
                 if c == background_label_id:
                     continue
@@ -218,14 +233,15 @@ class BBoxUtility(object):
                 if len(c_confs[c_confs_m]) > 0:
                     boxes_to_process = decode_bbox[c_confs_m]
                     confs_to_process = c_confs[c_confs_m]
-                    feed_dict = {self.boxes: boxes_to_process,
-                                 self.scores: confs_to_process}
+                    feed_dict = {
+                        self.boxes: boxes_to_process,
+                        self.scores: confs_to_process,
+                    }
                     idx = self.sess.run(self.nms, feed_dict=feed_dict)
                     good_boxes = boxes_to_process[idx]
                     confs = confs_to_process[idx][:, None]
                     labels = c * np.ones((len(idx), 1))
-                    c_pred = np.concatenate((labels, confs, good_boxes),
-                                            axis=1)
+                    c_pred = np.concatenate((labels, confs, good_boxes), axis=1)
                     results[-1].extend(c_pred)
             if len(results[-1]) > 0:
                 results[-1] = np.array(results[-1])
